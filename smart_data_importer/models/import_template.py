@@ -17,6 +17,7 @@ class ImportTemplate(models.Model):
         'ir.model', 
         string='Target Model', 
         required=True, 
+        ondelete='cascade',
         default=lambda self: self.env['ir.model'].search([('model', '=', 'res.partner')], limit=1)
     )
 
@@ -49,6 +50,6 @@ class ImportTemplateLine(models.Model):
     template_id = fields.Many2one('import.template', string='Template', required=True, ondelete='cascade')
     sequence = fields.Integer(string='Sequence', default=10)
     source_header = fields.Char(string='Original File Header', required=True)
-    target_field_id = fields.Many2one('ir.model.fields', string='Target Field', domain="[('model_id.model', '=', 'res.partner')]")
+    target_field_id = fields.Many2one('ir.model.fields', string='Target Field', domain="[('model_id.model', '=', 'res.partner')]", ondelete='cascade')
     cleansing_rule_ids = fields.Many2many('import.cleansing.rule', string='Cleansing Rules')
     is_ignored = fields.Boolean(string='Ignore Column', default=False)

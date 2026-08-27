@@ -9,7 +9,7 @@ class ImportColumnMapping(models.Model):
     source_header_normalized = fields.Char(string='Normalized Header', required=True)
     sample_values = fields.Char(string='Sample Values')
     
-    target_field_id = fields.Many2one('ir.model.fields', string='Target Field', domain="[('model_id.model', '=', 'res.partner')]")
+    target_field_id = fields.Many2one('ir.model.fields', string='Target Field', domain="[('model_id.model', '=', 'res.partner')]", ondelete='cascade')
     
     confidence = fields.Float(string='Confidence Score', help="From 0.0 to 1.0")
     source = fields.Selection([
