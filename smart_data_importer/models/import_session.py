@@ -159,7 +159,10 @@ class ImportSession(models.Model):
         if job_vals:
             jobs = self.env['import.job'].create(job_vals)
             for job in jobs:
-                job.with_delay(description=f"Import Session {self.name} - Chunk {job.chunk_index}").process_chunk()
+                if hasattr(job, 'with_delay'):
+                    job.with_delay(description=f"Import Session {self.name} - Chunk {job.chunk_index}").process_chunk()
+                else:
+                    job.process_chunk()
         else:
             self.state = 'done'
             self.end_time = fields.Datetime.now()

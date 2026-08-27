@@ -4,7 +4,7 @@
     'summary': 'Import data into res.partner from CSV/Excel files with AI-assisted mapping.',
     'category': 'Productivity',
     'author': 'Team',
-    'depends': ['base', 'web', 'queue_job'],
+    'depends': ['base', 'web'],
     'data': [
         'security/security.xml',
         'security/ir.model.access.csv',
