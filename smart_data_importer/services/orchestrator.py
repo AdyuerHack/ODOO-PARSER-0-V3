@@ -1,6 +1,6 @@
-from .file_reader import FileReader
-from .mapper_hash import HashMapper
-from .mapper_fuzzy import FuzzyMapper
+from odoo.addons.smart_data_importer.services.file_reader import FileReader
+from odoo.addons.smart_data_importer.services.mapper_hash import HashMapper
+from odoo.addons.smart_data_importer.services.mapper_fuzzy import FuzzyMapper
 from odoo.exceptions import UserError
 from odoo import _
 

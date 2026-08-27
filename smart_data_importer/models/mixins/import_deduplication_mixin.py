@@ -25,8 +25,8 @@ class ImportDeduplicationMixin(models.AbstractModel):
             if not getattr(record, 'file', None):
                 record.duplicate_count_file = 0
                 continue
-            from ...services.file_reader import FileReader
-            from ...services.deduplication_engine import DeduplicationEngine
+            from odoo.addons.smart_data_importer.services.file_reader import FileReader
+            from odoo.addons.smart_data_importer.services.deduplication_engine import DeduplicationEngine
             try:
                 file_info = FileReader.read(record.file, record.filename)
                 df = file_info['df']

@@ -1,6 +1,6 @@
 import hashlib
 from odoo import models, fields, api, _
-from ...services.file_reader import FileReader
+from odoo.addons.smart_data_importer.services.file_reader import FileReader
 
 class ImportSignatureMixin(models.AbstractModel):
     _name = 'import.signature.mixin'
