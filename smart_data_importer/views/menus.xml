@@ -13,15 +13,27 @@
               action="action_import_session"
               sequence="10"/>
 
+    <menuitem id="menu_smart_importer_templates"
+              name="Templates"
+              parent="menu_smart_importer_root"
+              action="action_import_template"
+              sequence="20"/>
+
     <menuitem id="menu_smart_importer_config"
               name="Configuration"
               parent="menu_smart_importer_root"
               sequence="100"
               groups="base.group_user"/>
 
+    <menuitem id="menu_smart_importer_cleansing_rules"
+              name="Cleansing Rules"
+              parent="menu_smart_importer_config"
+              action="action_import_cleansing_rule"
+              sequence="10"/>
+
     <menuitem id="menu_smart_importer_settings"
               name="Settings"
               parent="menu_smart_importer_config"
               action="action_smart_importer_configuration"
-              sequence="10"/>
+              sequence="20"/>
 </odoo>

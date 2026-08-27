@@ -1,34 +1,237 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
     <t t-name="smart_data_importer.PreviewTable">
-        <div class="o_preview_table_widget table-responsive">
+        <div class="o_smart_importer_dashboard border rounded p-3 bg-white shadow-sm">
+            <!-- Loading State -->
             <t t-if="state.loading">
-                <p>Loading preview...</p>
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading dashboard...</span>
+                    </div>
+                    <p class="text-muted mt-2">Loading data preview and quality metrics...</p>
+                </div>
             </t>
-            <t t-elif="state.rows.length === 0">
-                <p class="text-muted">No data to preview.</p>
+
+            <!-- Error State -->
+            <t t-elif="state.error">
+                <div class="alert alert-danger mb-0" role="alert">
+                    <i class="fa fa-exclamation-triangle me-2"/>
+                    <strong>Error:</strong> <t t-esc="state.error"/>
+                </div>
             </t>
+
+            <!-- Empty State -->
+            <t t-elif="!state.summary.raw_rows or state.summary.raw_rows.length === 0">
+                <div class="text-center py-4 text-muted">
+                    <i class="fa fa-file-text-o fa-2x mb-2"/>
+                    <p class="mb-0">No data available for preview. Please analyze the file first.</p>
+                </div>
+            </t>
+
+            <!-- Main Dashboard Content -->
             <t t-else="">
-                <table class="table table-sm table-bordered table-striped">
-                    <thead class="table-light">
-                        <tr>
-                            <t t-foreach="state.columns" t-as="col" t-key="col">
-                                <th><t t-esc="col"/></th>
-                            </t>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <t t-foreach="state.rows" t-as="row" t-key="row_index">
-                            <tr>
-                                <t t-foreach="state.columns" t-as="col" t-key="col_index">
-                                    <td class="text-truncate" style="max-width: 200px;" t-att-title="row[col]">
-                                        <t t-esc="row[col]"/>
-                                    </td>
+                <!-- Quality Metrics Header Cards -->
+                <div class="row g-2 mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-light border-0 h-100">
+                            <div class="card-body p-2 text-center">
+                                <span class="text-muted small d-block">Total Rows</span>
+                                <span class="fs-5 fw-bold text-primary"><t t-esc="state.summary.total_rows"/></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-light border-0 h-100">
+                            <div class="card-body p-2 text-center">
+                                <span class="text-muted small d-block">Mapped Columns</span>
+                                <span class="fs-5 fw-bold text-success">
+                                    <t t-esc="state.summary.metrics.mapped_columns"/> / <t t-esc="state.summary.metrics.total_columns"/>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-light border-0 h-100">
+                            <div class="card-body p-2 text-center">
+                                <span class="text-muted small d-block">Duplicates in File</span>
+                                <span t-attf-class="fs-5 fw-bold {{ state.summary.metrics.duplicate_file > 0 ? 'text-warning' : 'text-success' }}">
+                                    <t t-esc="state.summary.metrics.duplicate_file"/>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="card bg-light border-0 h-100">
+                            <div class="card-body p-2 text-center">
+                                <span class="text-muted small d-block">Avg Confidence</span>
+                                <span t-attf-class="fs-5 fw-bold {{ state.summary.metrics.avg_confidence >= 80 ? 'text-success' : (state.summary.metrics.avg_confidence >= 50 ? 'text-warning' : 'text-danger') }}">
+                                    <t t-esc="state.summary.metrics.avg_confidence"/>%
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation Toolbar & View Selector -->
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" 
+                                t-attf-class="btn {{ state.viewMode === 'transformed' ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                t-on-click="() => this.setViewMode('transformed')">
+                            <i class="fa fa-magic me-1"/> Transformed Clean Data
+                        </button>
+                        <button type="button" 
+                                t-attf-class="btn {{ state.viewMode === 'side_by_side' ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                t-on-click="() => this.setViewMode('side_by_side')">
+                            <i class="fa fa-columns me-1"/> Side-by-Side Comparison
+                        </button>
+                        <button type="button" 
+                                t-attf-class="btn {{ state.viewMode === 'raw' ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                t-on-click="() => this.setViewMode('raw')">
+                            <i class="fa fa-file-text-o me-1"/> Raw File Data
+                        </button>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-outline-primary" t-on-click="loadDashboard" title="Refresh Preview">
+                        <i class="fa fa-refresh me-1"/> Refresh
+                    </button>
+                </div>
+
+                <!-- 1. Transformed View -->
+                <t t-if="state.viewMode === 'transformed'">
+                    <div class="table-responsive" style="max-height: 420px;">
+                        <table class="table table-sm table-hover table-bordered align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 40px;" class="text-center">#</th>
+                                    <t t-foreach="state.summary.columns" t-as="col" t-key="col.id">
+                                        <t t-if="!col.is_ignored">
+                                            <th class="py-2">
+                                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                                    <span class="fw-bold text-dark"><t t-esc="col.target_field || col.header"/></span>
+                                                    <span t-attf-class="{{ this.getConfidenceClass(col.confidence) }}">
+                                                        <t t-esc="col.confidence"/>%
+                                                    </span>
+                                                </div>
+                                                <div class="small text-muted text-truncate" t-att-title="col.header">
+                                                    Col: <em><t t-esc="col.header"/></em>
+                                                </div>
+                                                <t t-if="col.rules_count > 0">
+                                                    <div class="mt-1">
+                                                        <span class="badge bg-secondary" t-att-title="col.rule_names.join(', ')">
+                                                            <i class="fa fa-filter me-1"/><t t-esc="col.rules_count"/> Rules
+                                                        </span>
+                                                    </div>
+                                                </t>
+                                            </th>
+                                        </t>
+                                    </t>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.summary.transformed_rows" t-as="row" t-key="row_index">
+                                    <tr>
+                                        <td class="text-center text-muted small"><t t-esc="row_index + 1"/></td>
+                                        <t t-foreach="state.summary.columns" t-as="col" t-key="col.id">
+                                            <t t-if="!col.is_ignored">
+                                                <td t-attf-class="{{ row[col.header] and row[col.header].is_modified ? 'bg-light-success fw-medium' : '' }}">
+                                                    <t t-if="row[col.header]">
+                                                        <span t-esc="row[col.header].value"/>
+                                                        <t t-if="row[col.header].is_modified">
+                                                            <i class="fa fa-check-circle text-success ms-1 small" title="Cleaned / Transformed by rule"/>
+                                                        </t>
+                                                    </t>
+                                                </td>
+                                            </t>
+                                        </t>
+                                    </tr>
                                 </t>
-                            </tr>
-                        </t>
-                    </tbody>
-                </table>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+
+                <!-- 2. Side-by-Side Comparison View -->
+                <t t-elif="state.viewMode === 'side_by_side'">
+                    <div class="alert alert-info py-2 small mb-2">
+                        <i class="fa fa-info-circle me-1"/> 
+                        Comparing <strong>Original (Raw)</strong> vs <strong>Transformed (Clean)</strong> data. Modified values are highlighted.
+                    </div>
+                    <div class="table-responsive" style="max-height: 420px;">
+                        <table class="table table-sm table-bordered align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 40px;" class="text-center">#</th>
+                                    <t t-foreach="state.summary.columns" t-as="col" t-key="col.id">
+                                        <t t-if="!col.is_ignored">
+                                            <th colspan="2" class="text-center border-start py-2">
+                                                <div class="fw-bold"><t t-esc="col.target_field || col.header"/></div>
+                                                <div class="small text-muted">Original: <t t-esc="col.header"/></div>
+                                            </th>
+                                        </t>
+                                    </t>
+                                </tr>
+                                <tr class="table-secondary small text-center">
+                                    <th></th>
+                                    <t t-foreach="state.summary.columns" t-as="col" t-key="col.id">
+                                        <t t-if="!col.is_ignored">
+                                            <th class="border-start text-muted" style="width: 140px;">Raw</th>
+                                            <th class="text-success fw-bold" style="width: 140px;">Clean</th>
+                                        </t>
+                                    </t>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.summary.raw_rows" t-as="raw_row" t-key="raw_row_index">
+                                    <t t-set="trans_row" t-value="state.summary.transformed_rows[raw_row_index]"/>
+                                    <tr>
+                                        <td class="text-center text-muted small"><t t-esc="raw_row_index + 1"/></td>
+                                        <t t-foreach="state.summary.columns" t-as="col" t-key="col.id">
+                                            <t t-if="!col.is_ignored">
+                                                <td class="border-start text-muted small text-truncate" style="max-width: 140px;" t-att-title="raw_row[col.header]">
+                                                    <t t-esc="raw_row[col.header]"/>
+                                                </td>
+                                                <td t-attf-class="small text-truncate {{ trans_row[col.header] and trans_row[col.header].is_modified ? 'bg-success-subtle text-success fw-bold' : '' }}" style="max-width: 140px;" t-att-title="trans_row[col.header] ? trans_row[col.header].value : ''">
+                                                    <t t-if="trans_row[col.header]">
+                                                        <t t-esc="trans_row[col.header].value"/>
+                                                    </t>
+                                                </td>
+                                            </t>
+                                        </t>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+
+                <!-- 3. Raw Data View -->
+                <t t-elif="state.viewMode === 'raw'">
+                    <div class="table-responsive" style="max-height: 420px;">
+                        <table class="table table-sm table-bordered table-striped align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th style="width: 40px;" class="text-center">#</th>
+                                    <t t-foreach="state.summary.raw_headers" t-as="header" t-key="header">
+                                        <th class="py-2"><t t-esc="header"/></th>
+                                    </t>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="state.summary.raw_rows" t-as="row" t-key="row_index">
+                                    <tr>
+                                        <td class="text-center text-muted small"><t t-esc="row_index + 1"/></td>
+                                        <t t-foreach="state.summary.raw_headers" t-as="header" t-key="header">
+                                            <td class="text-truncate" style="max-width: 180px;" t-att-title="row[header]">
+                                                <t t-esc="row[header]"/>
+                                            </td>
+                                        </t>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
             </t>
         </div>
     </t>

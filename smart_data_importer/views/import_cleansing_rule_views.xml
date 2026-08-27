@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Action -->
+    <record id="action_import_cleansing_rule" model="ir.actions.act_window">
+        <field name="name">Cleansing Rules</field>
+        <field name="res_model">import.cleansing.rule</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_group_by_category': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Define a new data cleansing and normalization rule.
+            </p>
+            <p>
+                Configure transformations (text cleanup, value mappings, date/number formatting, phone/email normalizers) and test them in real-time with the interactive Sandbox.
+            </p>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_import_cleansing_rule_list" model="ir.ui.view">
+        <field name="name">import.cleansing.rule.list</field>
+        <field name="model">import.cleansing.rule</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="category" widget="badge"
+                       decoration-info="category == 'text'"
+                       decoration-success="category == 'contact'"
+                       decoration-warning="category == 'number'"
+                       decoration-primary="category == 'date'"
+                       decoration-muted="category == 'custom'"/>
+                <field name="action_type"/>
+                <field name="description" optional="show"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View with Interactive Sandbox -->
+    <record id="view_import_cleansing_rule_form" model="ir.ui.view">
+        <field name="name">import.cleansing.rule.form</field>
+        <field name="model">import.cleansing.rule</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_test_rule" string="⚡ Test Rule Live" type="object" class="btn-secondary"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1>
+                            <field name="name" placeholder="e.g. Normalize Mobile Number / Capitalize City"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Configuration">
+                            <field name="category" widget="radio" options="{'horizontal': true}"/>
+                            <field name="action_type"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+
+                        <group string="🧪 Interactive Live Sandbox">
+                            <div class="alert alert-info py-2" role="status">
+                                <strong>Live Sandbox:</strong> Type sample input below to see how this rule transforms data in real time.
+                            </div>
+                            <field name="test_input" placeholder="Type sample data here (e.g. +57 300 123 4567)"/>
+                            <field name="test_output" class="fw-bold text-success" readonly="1" force_save="1"/>
+                        </group>
+                    </group>
+
+                    <!-- Contextual Settings based on action_type -->
+                    <notebook>
+                        <!-- Find & Replace Settings -->
+                        <page name="page_find_replace" string="Find &amp; Replace" invisible="action_type != 'find_replace'">
+                            <group>
+                                <group>
+                                    <field name="find_text" placeholder="e.g. Ltd."/>
+                                    <field name="replace_text" placeholder="e.g. Limited"/>
+                                    <field name="case_sensitive"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- Prefix & Suffix Settings -->
+                        <page name="page_prefix_suffix" string="Prefix &amp; Suffix" invisible="action_type != 'prefix_suffix'">
+                            <group>
+                                <group string="Prefix">
+                                    <field name="prefix_text" placeholder="e.g. +57"/>
+                                    <field name="remove_prefix"/>
+                                </group>
+                                <group string="Suffix">
+                                    <field name="suffix_text" placeholder="e.g. -CO"/>
+                                    <field name="remove_suffix"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- Value Mapping Dictionary -->
+                        <page name="page_value_mapping" string="Value Mapping Table" invisible="action_type != 'value_mapping'">
+                            <p class="text-muted">
+                                Map specific incoming values to standard target values (e.g. M → Masculino, F → Femenino, COL → Colombia).
+                            </p>
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="source_value" placeholder="e.g. BOG"/>
+                                    <field name="target_value" placeholder="e.g. Bogotá D.C."/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <!-- Default Value Fallback -->
+                        <page name="page_default_value" string="Default Value" invisible="action_type != 'default_value'">
+                            <group>
+                                <field name="default_value" placeholder="e.g. Colombia / Consumidor Final"/>
+                            </group>
+                        </page>
+
+                        <!-- Number & Currency Clean -->
+                        <page name="page_number" string="Number / Currency Notation" invisible="action_type != 'number_clean'">
+                            <group>
+                                <field name="decimal_separator"/>
+                            </group>
+                            <p class="text-muted">
+                                Strips currency symbols ($, €, £, COP, USD) and standardizes formatting to decimal numbers (e.g. 1.250.000,50 → 1250000.50).
+                            </p>
+                        </page>
+
+                        <!-- Date Formatting -->
+                        <page name="page_date" string="Date Formatting" invisible="action_type != 'date_format'">
+                            <group>
+                                <field name="date_input_format"/>
+                            </group>
+                            <p class="text-muted">
+                                Automatically converts dates to the Odoo ISO format (YYYY-MM-DD).
+                            </p>
+                        </page>
+
+                        <!-- Custom Regex -->
+                        <page name="page_regex" string="Regex Expression" invisible="action_type != 'regex'">
+                            <group>
+                                <field name="regex_pattern" placeholder="e.g. [^0-9A-Za-z]"/>
+                                <field name="regex_replacement" placeholder="e.g. empty string"/>
+                            </group>
+                        </page>
+
+                        <!-- Custom Python Code -->
+                        <page name="page_python" string="Python Code (Safe Eval)" invisible="action_type != 'python_code'">
+                            <div class="alert alert-warning py-2">
+                                <strong>Advanced:</strong> Execute custom Python expressions. Use variable <code>value</code> for input and assign output to <code>result</code>.
+                            </div>
+                            <field name="python_code" widget="ace" options="{'mode': 'python'}"/>
+                        </page>
+
+                        <!-- Description & Notes -->
+                        <page name="page_description" string="Documentation &amp; Notes">
+                            <field name="description" placeholder="Describe the purpose, source systems, or business rationale for this rule..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_import_cleansing_rule_search" model="ir.ui.view">
+        <field name="name">import.cleansing.rule.search</field>
+        <field name="model">import.cleansing.rule</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="action_type"/>
+                <field name="category"/>
+                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
+                <separator/>
+                <group expand="0" string="Group By">
+                    <filter string="Category" name="group_by_category" context="{'group_by': 'category'}"/>
+                    <filter string="Action Type" name="group_by_action_type" context="{'group_by': 'action_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+</odoo>

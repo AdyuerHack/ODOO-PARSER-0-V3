@@ -15,6 +15,9 @@
                         <setting string="Fuzzy Threshold" help="Threshold for Levenshtein matching (0-100).">
                             <field name="smart_data_importer_fuzzy_threshold"/>
                         </setting>
+                        <setting string="Chunk Size" help="Number of records to process per job. Default is 500 to avoid worker timeout.">
+                            <field name="smart_data_importer_chunk_size"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

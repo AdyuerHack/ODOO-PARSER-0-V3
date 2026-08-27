@@ -37,6 +37,38 @@ class PipelineOrchestrator:
         if not headers:
             return
             
+        # 1.5. Check for Matching Reusable Template (US-26)
+        matching_template = session.env['import.template'].find_matching_template(headers, model_name='res.partner')
+        if matching_template:
+            session.write({
+                'template_id': matching_template.id,
+                'duplicate_criterion': matching_template.duplicate_criterion,
+                'duplicate_policy': matching_template.duplicate_policy,
+            })
+            template_lines = {l.source_header.strip().lower(): l for l in matching_template.line_ids}
+            mapping_vals = []
+            for header in headers:
+                norm_h = header.strip().lower()
+                val = {
+                    'session_id': session.id,
+                    'source_header': header,
+                    'source_header_normalized': FileReader.normalize_header(header),
+                    'sample_values': ', '.join([str(x) for x in df[header].dropna().head(3).tolist()]),
+                    'source': 'template',
+                    'confidence': 1.0,
+                }
+                if norm_h in template_lines:
+                    t_line = template_lines[norm_h]
+                    val['target_field_id'] = t_line.target_field_id.id if t_line.target_field_id else False
+                    val['is_ignored'] = t_line.is_ignored
+                    if t_line.cleansing_rule_ids:
+                        val['cleansing_rule_ids'] = [(6, 0, t_line.cleansing_rule_ids.ids)]
+                mapping_vals.append(val)
+            
+            session.env['import.column.mapping'].create(mapping_vals)
+            session.state = 'mapped'
+            return
+
         # 2. Hash Mapping
         hash_results = HashMapper.map(session.env, headers, model_name='res.partner')
         
@@ -71,6 +103,24 @@ class PipelineOrchestrator:
                 if target_id not in assigned_fields:
                     assigned_fields[target_id] = []
                 assigned_fields[target_id].append(header)
+                
+                # Auto-assign sensible cleansing rules
+                target_field_rec = session.env['ir.model.fields'].browse(target_id)
+                f_name = target_field_rec.name
+                rule_action = None
+                if f_name in ('email',):
+                    rule_action = 'email'
+                elif f_name in ('phone', 'mobile'):
+                    rule_action = 'phone'
+                elif f_name in ('vat',):
+                    rule_action = 'vat_document'
+                elif f_name in ('name', 'street', 'street2', 'city'):
+                    rule_action = 'strip'
+                
+                if rule_action:
+                    rule_rec = session.env['import.cleansing.rule'].search([('action_type', '=', rule_action)], limit=1)
+                    if rule_rec:
+                        val['cleansing_rule_ids'] = [(6, 0, rule_rec.ids)]
                 
             mapping_vals.append(val)
             

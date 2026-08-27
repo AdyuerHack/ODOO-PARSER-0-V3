@@ -13,3 +13,8 @@ class ResConfigSettings(models.TransientModel):
         config_parameter='smart_data_importer.fuzzy_threshold',
         default=85
     )
+    smart_data_importer_chunk_size = fields.Integer(
+        string="Chunk Size",
+        config_parameter='smart_data_importer.chunk_size',
+        default=500
+    )

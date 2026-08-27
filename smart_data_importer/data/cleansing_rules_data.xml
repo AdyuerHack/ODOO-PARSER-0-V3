@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Text & Formatting -->
+        <record id="rule_strip_whitespace" model="import.cleansing.rule">
+            <field name="name">Trim Whitespace</field>
+            <field name="category">text</field>
+            <field name="sequence">5</field>
+            <field name="action_type">strip</field>
+            <field name="test_input">  John Doe  </field>
+            <field name="description">Removes leading and trailing spaces from text.</field>
+        </record>
+
+        <record id="rule_titlecase" model="import.cleansing.rule">
+            <field name="name">Capitalize Words (Title Case)</field>
+            <field name="category">text</field>
+            <field name="sequence">10</field>
+            <field name="action_type">titlecase</field>
+            <field name="test_input">juan perez rodriguez</field>
+            <field name="description">Capitalizes the first letter of each word (e.g. Juan Perez Rodriguez).</field>
+        </record>
+
+        <record id="rule_uppercase" model="import.cleansing.rule">
+            <field name="name">Convert to Uppercase</field>
+            <field name="category">text</field>
+            <field name="sequence">15</field>
+            <field name="action_type">uppercase</field>
+            <field name="test_input">bogota d.c.</field>
+            <field name="description">Converts all letters to UPPERCASE.</field>
+        </record>
+
+        <record id="rule_lowercase" model="import.cleansing.rule">
+            <field name="name">Convert to Lowercase</field>
+            <field name="category">text</field>
+            <field name="sequence">20</field>
+            <field name="action_type">lowercase</field>
+            <field name="test_input">ADMIN@COMPANY.COM</field>
+            <field name="description">Converts all letters to lowercase.</field>
+        </record>
+
+        <record id="rule_remove_accents" model="import.cleansing.rule">
+            <field name="name">Remove Accents / Diacritics</field>
+            <field name="category">text</field>
+            <field name="sequence">25</field>
+            <field name="action_type">remove_accents</field>
+            <field name="test_input">Medellín, Antioquia, Bogotá</field>
+            <field name="description">Replaces accented characters with ASCII equivalents (e.g. á -> a, ñ -> n).</field>
+        </record>
+
+        <record id="rule_digits_only" model="import.cleansing.rule">
+            <field name="name">Keep Digits Only</field>
+            <field name="category">text</field>
+            <field name="sequence">30</field>
+            <field name="action_type">digits_only</field>
+            <field name="test_input">Order #123-456 (Ref: 789)</field>
+            <field name="description">Strips any non-numeric characters.</field>
+        </record>
+
+        <!-- Contacts & Tax IDs -->
+        <record id="rule_normalize_email" model="import.cleansing.rule">
+            <field name="name">Normalize Email</field>
+            <field name="category">contact</field>
+            <field name="sequence">35</field>
+            <field name="action_type">email</field>
+            <field name="test_input">  &lt;Client.Contact@example.com&gt;  </field>
+            <field name="description">Cleans emails by trimming, lowercasing, and extracting clean email addresses.</field>
+        </record>
+
+        <record id="rule_normalize_phone" model="import.cleansing.rule">
+            <field name="name">Normalize Phone / Mobile</field>
+            <field name="category">contact</field>
+            <field name="sequence">40</field>
+            <field name="action_type">phone</field>
+            <field name="test_input">+57 (300) 123-4567</field>
+            <field name="description">Cleans phone numbers by removing spaces, dashes, parentheses and preserving country code.</field>
+        </record>
+
+        <record id="rule_normalize_vat" model="import.cleansing.rule">
+            <field name="name">Normalize Tax ID / Document</field>
+            <field name="category">contact</field>
+            <field name="sequence">45</field>
+            <field name="action_type">vat_document</field>
+            <field name="test_input">900.123.456-7</field>
+            <field name="description">Cleans NIT/RUT/VAT documents by removing internal dots and spaces and uppercasing.</field>
+        </record>
+
+        <!-- Numbers & Currency -->
+        <record id="rule_clean_currency_cop" model="import.cleansing.rule">
+            <field name="name">Clean Currency ($ COP / USD)</field>
+            <field name="category">number</field>
+            <field name="sequence">50</field>
+            <field name="action_type">number_clean</field>
+            <field name="decimal_separator">comma</field>
+            <field name="test_input">$ 1.500.000,50 COP</field>
+            <field name="description">Strips currency symbols ($, COP, USD) and standardizes comma decimals into standard format.</field>
+        </record>
+
+        <!-- Dates & Times -->
+        <record id="rule_normalize_date_iso" model="import.cleansing.rule">
+            <field name="name">Normalize Date to ISO (YYYY-MM-DD)</field>
+            <field name="category">date</field>
+            <field name="sequence">55</field>
+            <field name="action_type">date_format</field>
+            <field name="date_input_format">auto</field>
+            <field name="test_input">31/12/2025</field>
+            <field name="description">Converts date formats (DD/MM/YYYY, MM/DD/YYYY) to standard ISO format (YYYY-MM-DD).</field>
+        </record>
+    </data>
+</odoo>

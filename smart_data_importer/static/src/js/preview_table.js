@@ -10,32 +10,70 @@ export class PreviewTableWidget extends Component {
         this.orm = useService("orm");
         this.state = useState({
             loading: true,
-            columns: [],
-            rows: [],
+            error: null,
+            viewMode: "transformed", // 'transformed' | 'side_by_side' | 'raw'
+            summary: {
+                total_rows: 0,
+                columns: [],
+                raw_headers: [],
+                raw_rows: [],
+                transformed_rows: [],
+                metrics: {},
+            },
         });
 
         onWillStart(async () => {
-            await this.loadPreview();
+            await this.loadDashboard();
         });
     }
 
-    async loadPreview() {
+    async loadDashboard() {
         const recordId = this.props.record.resId;
         if (!recordId) {
             this.state.loading = false;
             return;
         }
 
+        this.state.loading = true;
+        this.state.error = null;
+
         try {
-            const rows = await this.orm.call("import.session", "get_preview_rows", [[recordId]]);
-            if (rows && rows.length > 0) {
-                this.state.columns = Object.keys(rows[0]);
-                this.state.rows = rows;
+            const data = await this.orm.call("import.session", "get_dashboard_summary", [[recordId]]);
+            if (data.error) {
+                this.state.error = data.error;
+            } else {
+                this.state.summary = data;
             }
         } catch (e) {
-            console.error("Error loading preview:", e);
+            console.error("Error loading import dashboard summary:", e);
+            this.state.error = e.message || "Failed to load preview.";
         } finally {
             this.state.loading = false;
+        }
+    }
+
+    setViewMode(mode) {
+        this.state.viewMode = mode;
+    }
+
+    getConfidenceClass(confidence) {
+        if (confidence >= 80) return "badge bg-success text-white";
+        if (confidence >= 50) return "badge bg-warning text-dark";
+        return "badge bg-danger text-white";
+    }
+
+    getSourceBadgeClass(source) {
+        switch (source) {
+            case "hash":
+                return "badge bg-primary text-white";
+            case "fuzzy":
+                return "badge bg-info text-dark";
+            case "llm":
+                return "badge bg-purple text-white";
+            case "manual":
+                return "badge bg-secondary text-white";
+            default:
+                return "badge bg-light text-muted border";
         }
     }
 }

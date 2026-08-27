@@ -3,3 +3,9 @@ access_import_session_user,import.session.user,model_import_session,base.group_u
 access_import_column_mapping_user,import.column.mapping.user,model_import_column_mapping,base.group_user,1,1,1,1
 access_mapping_registry_user,mapping.registry.user,model_mapping_registry,base.group_user,1,0,0,0
 access_mapping_registry_admin,mapping.registry.admin,model_mapping_registry,base.group_user,1,1,1,1
+access_import_job_user,import.job.user,model_import_job,base.group_user,1,1,1,1
+access_import_row_error_user,import.row.error.user,model_import_row_error,base.group_user,1,1,1,1
+access_import_cleansing_rule_user,import.cleansing.rule.user,model_import_cleansing_rule,base.group_user,1,1,1,1
+access_import_cleansing_rule_line_user,import.cleansing.rule.line.user,model_import_cleansing_rule_line,base.group_user,1,1,1,1
+access_import_template_user,import.template.user,model_import_template,base.group_user,1,1,1,1
+access_import_template_line_user,import.template.line.user,model_import_template_line,base.group_user,1,1,1,1

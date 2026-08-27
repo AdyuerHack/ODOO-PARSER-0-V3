@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Action -->
+    <record id="action_import_template" model="ir.actions.act_window">
+        <field name="name">Import Templates</field>
+        <field name="res_model">import.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create or manage reusable import templates.
+            </p>
+            <p>
+                Templates automatically map recurring files based on column header signatures, saving time and preventing errors.
+            </p>
+        </field>
+    </record>
+
+    <!-- List View -->
+    <record id="view_import_template_list" model="ir.ui.view">
+        <field name="name">import.template.list</field>
+        <field name="model">import.template</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="model_id"/>
+                <field name="line_count" string="Columns"/>
+                <field name="duplicate_criterion"/>
+                <field name="duplicate_policy"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_import_template_form" model="ir.ui.view">
+        <field name="name">import.template.form</field>
+        <field name="model">import.template</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only"/>
+                        <h1>
+                            <field name="name" placeholder="e.g. Monthly Supplier Excel Report"/>
+                        </h1>
+                    </div>
+
+                    <group>
+                        <group string="Target Configuration">
+                            <field name="model_id" readonly="1"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Default Deduplication Policy">
+                            <field name="duplicate_criterion"/>
+                            <field name="duplicate_policy"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page name="lines" string="Column Mappings &amp; Rules">
+                            <field name="line_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="source_header"/>
+                                    <field name="target_field_id"/>
+                                    <field name="cleansing_rule_ids" widget="many2many_tags" options="{'color_field': 'action_type'}"/>
+                                    <field name="is_ignored" widget="boolean_toggle"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page name="signature" string="Header Signature (Auto-Match)">
+                            <group>
+                                <field name="header_signature" readonly="1"/>
+                                <field name="header_list" readonly="1"/>
+                            </group>
+                        </page>
+
+                        <page name="description" string="Documentation &amp; Notes">
+                            <field name="description" placeholder="Document the source system, distributor, frequency, or special instructions for this template..."/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_import_template_search" model="ir.ui.view">
+        <field name="name">import.template.search</field>
+        <field name="model">import.template</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="model_id"/>
+                <filter string="Active" name="active" domain="[('active', '=', True)]"/>
+                <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Model" name="group_by_model" context="{'group_by': 'model_id'}"/>
+                    <filter string="Duplicate Policy" name="group_by_policy" context="{'group_by': 'duplicate_policy'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+</odoo>
