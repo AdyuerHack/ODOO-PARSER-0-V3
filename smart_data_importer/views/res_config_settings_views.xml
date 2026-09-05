@@ -19,6 +19,20 @@
                             <field name="smart_data_importer_chunk_size"/>
                         </setting>
                     </block>
+                    <block title="AI Agent (LLM Mapping)" name="smart_importer_llm">
+                        <setting string="Enable AI-Assisted Mapping" help="Uses an LLM to suggest mappings for columns not resolved by Hash or Fuzzy matching.">
+                            <field name="smart_data_importer_llm_enabled"/>
+                        </setting>
+                        <setting string="Provider" invisible="not smart_data_importer_llm_enabled">
+                            <field name="smart_data_importer_llm_provider"/>
+                        </setting>
+                        <setting string="Model Name" invisible="not smart_data_importer_llm_enabled">
+                            <field name="smart_data_importer_llm_model" placeholder="e.g. claude-3-5-haiku-20241022"/>
+                        </setting>
+                        <setting string="API Key" invisible="not smart_data_importer_llm_enabled">
+                            <field name="smart_data_importer_llm_api_key" password="True" placeholder="sk-..."/>
+                        </setting>
+                    </block>
                 </app>
             </xpath>
         </field>
