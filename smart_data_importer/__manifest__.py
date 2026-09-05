@@ -24,7 +24,7 @@
         ],
     },
     'external_dependencies': {
-        'python': ['pandas', 'openpyxl', 'chardet', 'rapidfuzz'],
+        'python': ['pandas', 'openpyxl', 'chardet', 'rapidfuzz', 'requests'],
     },
     'installable': True,
     'application': True,

@@ -13,6 +13,7 @@ class ImportColumnMapping(models.Model):
     target_field_name = fields.Char(related='target_field_id.name', string='Target Field Name', store=True, readonly=True)
 
     confidence = fields.Float(string='Confidence Score', help="From 0.0 to 1.0")
+    llm_justification = fields.Text(string='AI Justification', help="Explanation provided by the LLM for this suggested mapping.")
     source = fields.Selection([
         ('template', 'Template'),
         ('hash', 'Hash'),
