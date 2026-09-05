@@ -8,9 +8,10 @@ class ImportColumnMapping(models.Model):
     source_header = fields.Char(string='Original Header', required=True)
     source_header_normalized = fields.Char(string='Normalized Header', required=True)
     sample_values = fields.Char(string='Sample Values')
-    
+
     target_field_id = fields.Many2one('ir.model.fields', string='Target Field', domain="[('model_id.model', '=', 'res.partner')]", ondelete='cascade')
-    
+    target_field_name = fields.Char(related='target_field_id.name', string='Target Field Name', store=True, readonly=True)
+
     confidence = fields.Float(string='Confidence Score', help="From 0.0 to 1.0")
     source = fields.Selection([
         ('template', 'Template'),
@@ -19,7 +20,7 @@ class ImportColumnMapping(models.Model):
         ('llm', 'LLM'),
         ('manual', 'Manual')
     ], string='Source')
-    
+
     is_ignored = fields.Boolean(string='Ignore', default=False)
     is_conflict = fields.Boolean(string='Conflict', help="Target field is assigned to multiple columns", default=False)
     cleansing_rule_ids = fields.Many2many('import.cleansing.rule', string='Cleansing Rules')
@@ -38,6 +39,6 @@ class ImportColumnMapping(models.Model):
             rules |= self.env['import.cleansing.rule'].search([('action_type', '=', 'vat_document')], limit=1)
         elif field_name in ('name', 'street', 'street2', 'city'):
             rules |= self.env['import.cleansing.rule'].search([('action_type', '=', 'strip')], limit=1)
-        
+
         if rules:
             self.cleansing_rule_ids = [(6, 0, rules.ids)]
