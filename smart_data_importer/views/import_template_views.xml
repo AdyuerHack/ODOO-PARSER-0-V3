@@ -95,9 +95,9 @@
                 <field name="model_id"/>
                 <filter string="Active" name="active" domain="[('active', '=', True)]"/>
                 <filter string="Archived" name="inactive" domain="[('active', '=', False)]"/>
-                <group expand="0" string="Group By">
+                <group>
                     <filter string="Model" name="group_by_model" context="{'group_by': 'model_id'}"/>
-                    <filter string="Duplicate Policy" name="group_by_policy" context="{'group_by': 'duplicate_policy'}"/>
+                    <filter string="Duplicate Policy" name="group_by_policy" context="{'group_by': 'duplicate_policy'}"/>   
                 </group>
             </search>
         </field>

@@ -87,6 +87,7 @@
                                     <field name="cleansing_rule_ids" widget="many2many_tags" options="{'color_field': 'action_type'}"/>
                                     <field name="source" readonly="1"/>
                                     <field name="confidence" readonly="1" widget="percentage"/>
+                                    <field name="llm_justification" readonly="1" optional="hide" invisible="source != 'llm'"/>
                                     <field name="is_ignored" widget="boolean_toggle"/>
                                     <field name="is_conflict" invisible="1"/>
                                 </list>
