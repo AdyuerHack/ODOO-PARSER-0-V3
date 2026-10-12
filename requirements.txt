@@ -2,3 +2,4 @@ rapidfuzz
 pandas
 openpyxl
 chardet
+requests
