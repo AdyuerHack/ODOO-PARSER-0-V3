@@ -38,11 +38,15 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_analyze" string="Analyze" type="object" class="btn-primary" 
+                    <button name="action_ai_prepare_and_upload_template" string="🤖 Preparar y Subir Plantilla con IA" type="object" class="btn-primary" 
                             invisible="state != 'draft' or not file"/>
-                    <button name="action_save_as_template" string="Save as Template" type="object" class="btn-secondary" 
+                    <button name="action_analyze" string="Analizar (Local / Caché)" type="object" class="btn-secondary" 
+                            invisible="state != 'draft' or not file"/>
+                    <button name="action_ai_prepare_and_upload_template" string="🤖 Re-analizar y Actualizar Plantilla con IA" type="object" class="btn-secondary" 
+                            invisible="state != 'mapped' or not file"/>
+                    <button name="action_save_as_template" string="Guardar como Plantilla" type="object" class="btn-secondary" 
                             invisible="state != 'mapped'"/>
-                    <button name="action_confirm_mapping" string="Confirm and Import" type="object" class="btn-primary" 
+                    <button name="action_confirm_mapping" string="Confirmar e Importar" type="object" class="btn-primary" 
                             invisible="state != 'mapped'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,analyzing,mapped,queued,processing,done"/>
                 </header>
@@ -55,20 +59,20 @@
                         </h1>
                     </div>
                     <group>
-                        <group string="File &amp; Ingestion">
+                        <group string="Archivo &amp; Carga">
                             <field name="filename" invisible="1"/>
                             <field name="file" filename="filename" widget="binary" readonly="state != 'draft'"/>
-                            <field name="template_id" readonly="state != 'mapped'" placeholder="Auto-detected or select manual..."/>
+                            <field name="template_id" readonly="state != 'mapped'" placeholder="Auto-detectada o seleccionar manual..."/>
                             <field name="user_id" readonly="1"/>
                             <field name="total_rows" readonly="1" invisible="not total_rows"/>
                         </group>
-                        <group string="Deduplication &amp; Policy" invisible="state == 'draft'">
+                        <group string="Deduplicación &amp; Política" invisible="state == 'draft'">
                             <field name="duplicate_criterion" readonly="state != 'mapped'"/>
                             <field name="duplicate_policy" readonly="state != 'mapped'"/>
                             <field name="duplicate_count_file" readonly="1"/>
                             <field name="duplicate_count_odoo" readonly="1" invisible="state not in ('queued', 'processing', 'done', 'error')"/>
                         </group>
-                        <group string="Execution Stats" invisible="state not in ('queued', 'processing', 'done', 'error')">
+                        <group string="Estadísticas de Ejecución" invisible="state not in ('queued', 'processing', 'done', 'error')">
                             <field name="processed_rows" readonly="1"/>
                             <field name="updated_rows" readonly="1"/>
                             <field name="skipped_rows" readonly="1"/>
@@ -78,7 +82,7 @@
                         </group>
                     </group>
                     <notebook invisible="state == 'draft'">
-                        <page name="mappings" string="Column Mapping">
+                        <page name="mappings" string="Mapeo de Columnas">
                             <field name="column_mapping_ids" readonly="state != 'mapped'">
                                 <list editable="bottom" decoration-danger="is_conflict">
                                     <field name="source_header" readonly="1"/>
@@ -87,11 +91,20 @@
                                     <field name="cleansing_rule_ids" widget="many2many_tags" options="{'color_field': 'action_type'}"/>
                                     <field name="source" readonly="1"/>
                                     <field name="confidence" readonly="1" widget="percentage"/>
-                                    <field name="llm_justification" readonly="1" optional="hide" invisible="source != 'llm'"/>
+                                    <field name="llm_justification" readonly="1" optional="show" invisible="source != 'llm'"/>
                                     <field name="is_ignored" widget="boolean_toggle"/>
                                     <field name="is_conflict" invisible="1"/>
                                 </list>
                             </field>
+                        </page>
+                        <page name="ai_summary" string="🧠 Diagnóstico y Calidad IA" invisible="not ai_analysis_summary">
+                            <group>
+                                <field name="ai_template_name" readonly="1"/>
+                            </group>
+                            <div class="alert alert-info" role="status">
+                                <strong>Análisis inteligente generado por la IA:</strong>
+                                <field name="ai_analysis_summary" widget="text" readonly="1" nolabel="1"/>
+                            </div>
                         </page>
                         <page name="preview" string="📊 Data Preview &amp; Dashboard" invisible="state == 'draft'">
                             <field name="preview_data" widget="preview_table" nolabel="1"/>

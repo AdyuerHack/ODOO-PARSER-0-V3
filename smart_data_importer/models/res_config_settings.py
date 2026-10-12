@@ -20,24 +20,58 @@ class ResConfigSettings(models.TransientModel):
     )
 
     smart_data_importer_llm_enabled = fields.Boolean(
-        string="Enable AI-Assisted Mapping",
+        string="Enable AI-Assisted Mapping & Templates",
         config_parameter='smart_data_importer.llm_enabled',
         default=False,
-        help="When enabled, columns not resolved by Hash or Fuzzy matching are sent to the configured LLM for semantic mapping suggestions."
+        help="When enabled, AI will analyze spreadsheets, auto-generate templates, suggest mappings and cleansing rules."
     )
     smart_data_importer_llm_provider = fields.Selection([
-        ('anthropic', 'Anthropic (Claude)'),
-        ('openai', 'OpenAI (GPT)'),
-    ], string="LLM Provider",
+        ('deepseek', 'DeepSeek (DeepSeek-V3 / R1)'),
+        ('anthropic', 'Anthropic (Claude 3.5 Sonnet / Haiku)'),
+        ('gemini', 'Google Gemini (Gemini 2.0 Flash / 1.5 Pro)'),
+        ('openai', 'OpenAI (GPT-4o / GPT-4o-mini)'),
+        ('custom', 'Custom / Local (Ollama, Groq, OpenRouter)'),
+    ], string="AI Provider",
         config_parameter='smart_data_importer.llm_provider',
-        default='anthropic'
+        default='deepseek'
     )
     smart_data_importer_llm_model = fields.Char(
         string="Model Name",
         config_parameter='smart_data_importer.llm_model',
-        help="e.g. claude-3-5-haiku-20241022, gpt-4o-mini"
+        help="e.g. deepseek-chat, claude-3-5-haiku-20241022, gemini-1.5-flash, gpt-4o-mini"
     )
     smart_data_importer_llm_api_key = fields.Char(
         string="API Key",
         config_parameter='smart_data_importer.llm_api_key'
     )
+    smart_data_importer_llm_base_url = fields.Char(
+        string="Custom Base URL / Endpoint",
+        config_parameter='smart_data_importer.llm_base_url',
+        help="Custom OpenAI-compatible URL e.g. http://localhost:11434/v1 or https://api.groq.com/openai/v1"
+    )
+
+    def action_test_llm_connection(self):
+        """Tests the LLM connection and returns a notification to the user."""
+        self.ensure_one()
+        # Save current settings to ir.config_parameter first so the test runs against them
+        config = self.env['ir.config_parameter'].sudo()
+        config.set_param('smart_data_importer.llm_enabled', 'True' if self.smart_data_importer_llm_enabled else 'False')
+        config.set_param('smart_data_importer.llm_provider', self.smart_data_importer_llm_provider or 'deepseek')
+        config.set_param('smart_data_importer.llm_model', self.smart_data_importer_llm_model or '')
+        config.set_param('smart_data_importer.llm_api_key', self.smart_data_importer_llm_api_key or '')
+        config.set_param('smart_data_importer.llm_base_url', self.smart_data_importer_llm_base_url or '')
+
+        from ..services.mapper_llm import LLMMapper
+        success, message = LLMMapper.test_connection(self.env)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Prueba de Conexión IA' if success else 'Fallo de Conexión IA',
+                'message': message,
+                'type': 'success' if success else 'danger',
+                'sticky': not success,
+            }
+        }
+

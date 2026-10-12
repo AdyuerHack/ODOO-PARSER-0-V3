@@ -1,5 +1,5 @@
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 import base64
 
 class ImportSession(models.Model):
@@ -28,6 +28,9 @@ class ImportSession(models.Model):
     column_mapping_ids = fields.One2many('import.column.mapping', 'session_id', string='Column Mappings')
     job_ids = fields.One2many('import.job', 'session_id', string='Jobs')
     template_id = fields.Many2one('import.template', string='Applied Template')
+
+    ai_analysis_summary = fields.Text(string='AI Analysis Summary', readonly=True)
+    ai_template_name = fields.Char(string='AI Suggested Template Name', readonly=True)
 
     @api.onchange('template_id')
     def _onchange_template_id(self):
@@ -63,6 +66,148 @@ class ImportSession(models.Model):
         PipelineOrchestrator.run_premapping(self)
         self._compute_file_duplicates()
         return True
+
+    def action_ai_prepare_and_upload_template(self):
+        """
+        AI Intelligent Preparation & Upload:
+        Reads the file, requests deep analysis and structuring from the configured AI
+        (DeepSeek, Claude, Gemini, OpenAI, or Custom), automatically creates/uploads
+        the Odoo import.template record, links it, and sets up column mappings with
+        normalization rules ready for import.
+        """
+        self.ensure_one()
+        if not self.file:
+            raise UserError(_("Por favor, suba un archivo (CSV o Excel) antes de solicitar el análisis de IA."))
+
+        config = self.env['ir.config_parameter'].sudo()
+        if config.get_param('smart_data_importer.llm_enabled', 'False') != 'True':
+            raise UserError(_("El asistente de IA no está habilitado. Por favor, actívelo en Configuración > Smart Importer > Settings e ingrese su API Key."))
+
+        from ..services.file_reader import FileReader
+        from ..services.mapper_llm import LLMMapper
+
+        # 1. Ingest file and extract raw dataframe
+        try:
+            file_info = FileReader.read(self.file, self.filename)
+        except Exception as e:
+            raise UserError(_("Error al leer el archivo: %s") % str(e))
+
+        df = file_info['df']
+        headers = list(df.columns)
+        if not headers:
+            raise UserError(_("El archivo cargado no contiene columnas reconocibles."))
+
+        # Update file metadata
+        self.write({
+            'encoding': file_info['encoding'],
+            'delimiter': file_info['delimiter'],
+            'header_row_index': file_info['header_row_index'],
+            'total_rows': file_info['total_rows'],
+            'state': 'analyzing'
+        })
+
+        # 2. Build sample values per column
+        sample_values_map = {
+            header: [str(x) for x in df[header].dropna().head(5).tolist()]
+            for header in headers
+        }
+
+        # 3. Call Universal AI for template analysis and structuring
+        ai_data = LLMMapper.analyze_and_structure_template(
+            env=self.env,
+            headers=headers,
+            sample_values_map=sample_values_map,
+            total_rows=self.total_rows,
+            filename=self.filename or self.name,
+            model_name='res.partner'
+        )
+
+        # 4. Generate header signature for template matching
+        signature = self.env['import.template'].compute_header_signature(headers)
+
+        # 5. Build template lines
+        template_lines_vals = []
+        for m in ai_data['mappings']:
+            template_lines_vals.append((0, 0, {
+                'source_header': m['header'],
+                'target_field_id': m['target_field_id'],
+                'cleansing_rule_ids': [(6, 0, m['rule_ids'])] if m['rule_ids'] else False,
+                'is_ignored': m['is_ignored'],
+            }))
+
+        template_name = ai_data.get('template_name') or _("Plantilla IA - %s") % (self.filename or self.name)
+        provider_name = ai_data.get('provider', 'AI').upper()
+        model_name = ai_data.get('model', '')
+
+        # 6. Create and upload template directly to Odoo
+        template = self.env['import.template'].create({
+            'name': template_name,
+            'header_signature': signature,
+            'header_list': ', '.join(headers),
+            'duplicate_criterion': ai_data.get('duplicate_criterion', 'vat'),
+            'duplicate_policy': ai_data.get('duplicate_policy', 'update'),
+            'description': _("Generada y organizada automáticamente por IA (%s - %s):\n\n%s") % (
+                provider_name, model_name, ai_data.get('summary', '')
+            ),
+            'line_ids': template_lines_vals,
+        })
+
+        # 7. Apply to current session
+        self.template_id = template.id
+        self.duplicate_criterion = ai_data.get('duplicate_criterion', 'vat')
+        self.duplicate_policy = ai_data.get('duplicate_policy', 'update')
+        self.ai_analysis_summary = ai_data.get('summary', '')
+        self.ai_template_name = template_name
+
+        # 8. Create session column mappings
+        self.column_mapping_ids.unlink()
+        mapping_vals = []
+        assigned_fields = {}
+
+        for m in ai_data['mappings']:
+            val = {
+                'session_id': self.id,
+                'source_header': m['header'],
+                'source_header_normalized': FileReader.normalize_header(m['header']),
+                'sample_values': ', '.join(sample_values_map.get(m['header'], [])),
+                'target_field_id': m['target_field_id'],
+                'source': 'llm',
+                'confidence': m['confidence'],
+                'llm_justification': m['justification'],
+                'is_ignored': m['is_ignored'],
+                'cleansing_rule_ids': [(6, 0, m['rule_ids'])] if m['rule_ids'] else False,
+            }
+            target_id = m['target_field_id']
+            if target_id:
+                if target_id not in assigned_fields:
+                    assigned_fields[target_id] = []
+                assigned_fields[target_id].append(m['header'])
+            mapping_vals.append(val)
+
+        # Detect conflicts
+        for val in mapping_vals:
+            target_id = val.get('target_field_id')
+            if target_id and len(assigned_fields[target_id]) > 1:
+                val['is_conflict'] = True
+
+        self.env['import.column.mapping'].create(mapping_vals)
+        self.state = 'mapped'
+        self._compute_file_duplicates()
+
+        mapped_count = len([m for m in ai_data['mappings'] if m.get('target_field_id') and not m.get('is_ignored')])
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('¡Plantilla Creada y Subida a Odoo con Éxito!'),
+                'message': _("La IA (%s) analizó el archivo, organizó y subió la plantilla '%s' con %s columnas mapeadas y listas para importar.") % (
+                    provider_name, template.name, mapped_count
+                ),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
 
     def action_save_as_template(self):
         self.ensure_one()
