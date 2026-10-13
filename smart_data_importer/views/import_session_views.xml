@@ -9,6 +9,10 @@
             <p class="o_view_nocontent_smiling_face">
                 Create a new import session.
             </p>
+            <p>
+                Upload a CSV or Excel file. Workbooks with several sheets (instructions, possible values, data)
+                are supported: choose the sheet and the Odoo model to import into.
+            </p>
         </field>
     </record>
 
@@ -20,10 +24,12 @@
             <list>
                 <field name="name"/>
                 <field name="filename"/>
+                <field name="sheet_id" optional="show"/>
+                <field name="target_model_id" optional="show"/>
                 <field name="create_date"/>
-                <field name="state" widget="badge" 
-                       decoration-info="state in ('draft', 'queued')" 
-                       decoration-warning="state in ('analyzing', 'processing')" 
+                <field name="state" widget="badge"
+                       decoration-info="state in ('draft', 'queued')"
+                       decoration-warning="state in ('analyzing', 'processing')"
                        decoration-success="state in ('mapped', 'done')"
                        decoration-danger="state == 'error'"/>
                 <field name="user_id" widget="many2one_avatar_user"/>
@@ -38,15 +44,15 @@
         <field name="arch" type="xml">
             <form>
                 <header>
-                    <button name="action_ai_prepare_and_upload_template" string="🤖 Preparar y Subir Plantilla con IA" type="object" class="btn-primary" 
-                            invisible="state != 'draft' or not file"/>
-                    <button name="action_analyze" string="Analizar (Local / Caché)" type="object" class="btn-secondary" 
-                            invisible="state != 'draft' or not file"/>
-                    <button name="action_ai_prepare_and_upload_template" string="🤖 Re-analizar y Actualizar Plantilla con IA" type="object" class="btn-secondary" 
-                            invisible="state != 'mapped' or not file"/>
-                    <button name="action_save_as_template" string="Guardar como Plantilla" type="object" class="btn-secondary" 
+                    <button name="action_ai_prepare_and_upload_template" string="🤖 Preparar y Subir Plantilla con IA" type="object" class="btn-primary"
+                            invisible="state != 'draft' or not id"/>
+                    <button name="action_analyze" string="Analizar (Local / Caché)" type="object" class="btn-secondary"
+                            invisible="state != 'draft' or not id"/>
+                    <button name="action_ai_prepare_and_upload_template" string="🤖 Re-analizar y Actualizar Plantilla con IA" type="object" class="btn-secondary"
                             invisible="state != 'mapped'"/>
-                    <button name="action_confirm_mapping" string="Confirmar e Importar" type="object" class="btn-primary" 
+                    <button name="action_save_as_template" string="Guardar como Plantilla" type="object" class="btn-secondary"
+                            invisible="state != 'mapped'"/>
+                    <button name="action_confirm_mapping" string="Confirmar e Importar" type="object" class="btn-primary"
                             invisible="state != 'mapped'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,analyzing,mapped,queued,processing,done"/>
                 </header>
@@ -58,13 +64,29 @@
                             <field name="name"/>
                         </h1>
                     </div>
+                    <div class="alert alert-info" role="status" invisible="id">
+                        Sube el archivo y guarda: el sistema leerá las hojas del libro y detectará el modelo de Odoo automáticamente.
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="not model_detection_note or state != 'draft'">
+                        <field name="model_detection_note" readonly="1" nolabel="1"/>
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="required_missing_count == 0">
+                        Hay <field name="required_missing_count" class="fw-bold"/> celdas vacías en columnas marcadas como obligatorias en la plantilla.
+                        Revisa la columna "Vacías" en el mapeo.
+                    </div>
                     <group>
                         <group string="Archivo &amp; Carga">
                             <field name="filename" invisible="1"/>
                             <field name="file" filename="filename" widget="binary" readonly="state != 'draft'"/>
-                            <field name="template_id" readonly="state != 'mapped'" placeholder="Auto-detectada o seleccionar manual..."/>
+                            <field name="sheet_id" readonly="state != 'draft'" invisible="not sheet_ids"
+                                   options="{'no_create': True, 'no_open': True}"/>
+                            <field name="target_model_id" readonly="state != 'draft'" options="{'no_create': True}"/>
+                            <field name="model_detection_score" widget="percentage" invisible="not model_detection_score"/>
+                            <field name="template_id" readonly="state != 'mapped'" placeholder="Auto-detectada o seleccionar manual..."
+                                   domain="[('model_id', '=', target_model_id)]"/>
                             <field name="user_id" readonly="1"/>
                             <field name="total_rows" readonly="1" invisible="not total_rows"/>
+                            <field name="dropped_rows" readonly="1" invisible="not dropped_rows"/>
                         </group>
                         <group string="Deduplicación &amp; Política" invisible="state == 'draft'">
                             <field name="duplicate_criterion" readonly="state != 'mapped'"/>
@@ -73,27 +95,51 @@
                             <field name="duplicate_count_odoo" readonly="1" invisible="state not in ('queued', 'processing', 'done', 'error')"/>
                         </group>
                         <group string="Estadísticas de Ejecución" invisible="state not in ('queued', 'processing', 'done', 'error')">
+                            <field name="progress_percent" widget="progressbar" readonly="1"/>
                             <field name="processed_rows" readonly="1"/>
+                            <field name="created_rows" readonly="1"/>
                             <field name="updated_rows" readonly="1"/>
                             <field name="skipped_rows" readonly="1"/>
                             <field name="failed_rows" readonly="1"/>
                             <field name="start_time" readonly="1"/>
                             <field name="end_time" readonly="1"/>
+                            <field name="duration_seconds" readonly="1"/>
                         </group>
                     </group>
-                    <notebook invisible="state == 'draft'">
-                        <page name="mappings" string="Mapeo de Columnas">
+                    <notebook>
+                        <page name="sheets" string="Hojas del archivo" invisible="not sheet_ids">
+                            <field name="sheet_ids" readonly="1">
+                                <list decoration-muted="kind != 'data'" decoration-bf="kind == 'data'">
+                                    <field name="name"/>
+                                    <field name="kind"/>
+                                    <field name="visible" widget="boolean"/>
+                                    <field name="row_count"/>
+                                    <field name="column_count"/>
+                                    <field name="dropped_rows"/>
+                                    <field name="header_list" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="mappings" string="Mapeo de Columnas" invisible="state == 'draft'">
                             <field name="column_mapping_ids" readonly="state != 'mapped'">
-                                <list editable="bottom" decoration-danger="is_conflict">
+                                <list editable="bottom" decoration-danger="is_conflict" decoration-muted="is_ignored">
                                     <field name="source_header" readonly="1"/>
+                                    <field name="required_level" readonly="1" widget="badge" optional="show"
+                                           decoration-danger="required_level == 'required'"
+                                           decoration-info="required_level == 'conditional'"
+                                           decoration-success="required_level == 'optional'"/>
+                                    <field name="empty_count" string="Vacías" readonly="1" optional="show"
+                                           decoration-danger="required_level == 'required' and empty_count &gt; 0"/>
                                     <field name="sample_values" readonly="1" optional="show"/>
-                                    <field name="target_field_id"/>
+                                    <field name="target_field_id" options="{'no_create': True}"
+                                           domain="[('model_id', '=', parent.target_model_id)]"/>
+                                    <field name="target_subfield" optional="hide"/>
                                     <field name="cleansing_rule_ids" widget="many2many_tags" options="{'color_field': 'action_type'}"/>
                                     <field name="source" readonly="1"/>
                                     <field name="confidence" readonly="1" widget="percentage"/>
-                                    <field name="llm_justification" readonly="1" optional="show" invisible="source != 'llm'"/>
+                                    <field name="llm_justification" readonly="1" optional="show"/>
                                     <field name="is_ignored" widget="boolean_toggle"/>
-                                    <field name="is_conflict" invisible="1"/>
+                                    <field name="is_conflict" column_invisible="1"/>
                                 </list>
                             </field>
                         </page>
@@ -118,6 +164,16 @@
                                     <field name="attempts"/>
                                     <field name="state" widget="badge"/>
                                     <field name="error_message" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page name="row_errors" string="Errores por fila" invisible="failed_rows == 0">
+                            <field name="row_error_ids" readonly="1">
+                                <list>
+                                    <field name="row_number" string="Fila"/>
+                                    <field name="error_type"/>
+                                    <field name="error_message"/>
+                                    <field name="raw_data" optional="hide"/>
                                 </list>
                             </field>
                         </page>

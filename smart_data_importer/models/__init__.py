@@ -2,6 +2,7 @@ from . import mixins
 from . import import_cleansing_rule
 from . import import_template
 from . import import_session
+from . import import_session_sheet
 from . import mapping_registry
 from . import import_column_mapping
 from . import res_config_settings

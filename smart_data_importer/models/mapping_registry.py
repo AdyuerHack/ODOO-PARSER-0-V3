@@ -14,6 +14,8 @@ class MappingRegistry(models.Model):
     ], string='Language', default='es', required=True)
     priority = fields.Integer(string='Priority', default=10, help="Higher priority synonyms are matched first.")
 
-    _sql_constraints = [
-        ('synonym_model_uniq', 'unique(synonym, model_id, language)', 'Synonym must be unique per model and language!')
-    ]
+    # Odoo 19 syntax (replaces the old _sql_constraints list)
+    _synonym_model_uniq = models.Constraint(
+        'unique(synonym, model_id, language)',
+        'Synonym must be unique per model and language!',
+    )

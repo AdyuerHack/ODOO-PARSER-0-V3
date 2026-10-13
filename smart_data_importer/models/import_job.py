@@ -3,10 +3,11 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+
 class ImportJob(models.Model):
     _name = 'import.job'
     _description = 'Import Job Chunk'
-    _order = 'create_date asc'
+    _order = 'create_date asc, chunk_index asc'
 
     session_id = fields.Many2one('import.session', string='Session', required=True, ondelete='cascade')
     chunk_index = fields.Integer(string='Chunk Index', required=True)
@@ -21,100 +22,114 @@ class ImportJob(models.Model):
     attempts = fields.Integer(string='Attempts', default=0)
     error_message = fields.Text(string='Error Message')
     row_error_ids = fields.One2many('import.row.error', 'job_id', string='Row Errors')
-    
+
     def process_chunk(self):
-        """Method executed by queue_job to process this chunk of rows."""
+        """Import the rows [row_from, row_to) of the session sheet into the target model."""
         self.ensure_one()
-        self.state = 'processing'
-        self.attempts += 1
-        
+        session = self.session_id
+        self.write({'state': 'processing', 'attempts': self.attempts + 1})
+
+        from ..services.cleansing_engine import CleansingEngine
+        from ..services.deduplication_engine import DeduplicationEngine
+        from ..services.value_converter import ValueConverter, ConversionError
+        import pandas as pd
+
+        counters = {'created': 0, 'updated': 0, 'skipped': 0, 'failed': 0, 'dups': 0}
         try:
-            from ..services.file_reader import FileReader
-            file_info = FileReader.read(self.session_id.file, self.session_id.filename)
-            df = file_info['df']
-            
-            # Slice the df for this chunk
+            model_name = session.target_model_id.model
+            Model = self.env[model_name]
+            converter = ValueConverter(self.env, model_name)
+
+            df = session._read_file()['df']
             chunk_df = df.iloc[self.row_from:self.row_to]
-            
-            # Get validated mappings from session
-            mappings = self.session_id.column_mapping_ids.filtered(lambda m: not m.is_ignored and m.target_field_id)
-            mapping_rules = {m.source_header: (m.target_field_id.name, m.cleansing_rule_ids) for m in mappings}
-            
-            from ..services.cleansing_engine import CleansingEngine
-            from ..services.deduplication_engine import DeduplicationEngine
-            import pandas as pd
-            
-            created_count = 0
-            updated_count = 0
-            skipped_count = 0
-            fail_count = 0
-            dups_odoo_count = 0
-            
-            policy = self.session_id.duplicate_policy or 'update'
-            criterion = self.session_id.duplicate_criterion or 'vat'
-            
-            for index, row in chunk_df.iterrows():
-                row_dict = {}
-                for header, (target_field, rules) in mapping_rules.items():
+
+            mappings = session.column_mapping_ids.filtered(lambda m: not m.is_ignored and m.target_field_id)
+            plan = [(m.source_header, m.target_field_id.name, m.target_subfield or None, m.cleansing_rule_ids)
+                    for m in mappings]
+            policy = session.duplicate_policy or 'update'
+            criterion = session.duplicate_criterion or 'auto'
+
+            for row_number, row in chunk_df.iterrows():
+                row_dict, errors = {}, []
+                for header, field_name, subfield, rules in plan:
                     val = row.get(header)
-                    if pd.isna(val):
+                    if val is None or pd.isna(val):
                         continue
                     if rules:
                         val = CleansingEngine.apply_rules(val, rules)
-                    row_dict[target_field] = val
-                    
-                if not row_dict:
+                    try:
+                        converted = converter.convert(field_name, val, subfield=subfield)
+                    except ConversionError as e:
+                        errors.append(str(e))
+                        continue
+                    if converted is not False or self.env[model_name]._fields[field_name].type == 'boolean':
+                        row_dict[field_name] = converted
+
+                if not row_dict and not errors:
+                    counters['skipped'] += 1
                     continue
-                    
-                # Use savepoint to isolate record failures
+                if errors:
+                    counters['failed'] += 1
+                    self._log_row_error(row_number, row, 'ConversionError', '\n'.join(errors))
+                    continue
+
                 try:
                     with self.env.cr.savepoint():
-                        partner = DeduplicationEngine.find_existing_partner(self.env, row_dict, criterion=criterion)
-                        if partner:
-                            dups_odoo_count += 1
+                        existing = DeduplicationEngine.find_existing(self.env, model_name, row_dict, criterion)
+                        if existing:
+                            counters['dups'] += 1
                             if policy == 'update':
-                                partner.write(row_dict)
-                                updated_count += 1
+                                existing.write(row_dict)
+                                counters['updated'] += 1
                             elif policy == 'skip':
-                                skipped_count += 1
-                            elif policy == 'create':
-                                self.env['res.partner'].create(row_dict)
-                                created_count += 1
+                                counters['skipped'] += 1
+                            else:  # create
+                                Model.create(row_dict)
+                                counters['created'] += 1
                         else:
-                            self.env['res.partner'].create(row_dict)
-                            created_count += 1
+                            Model.create(row_dict)
+                            counters['created'] += 1
                 except Exception as e:
-                    fail_count += 1
-                    _logger.warning("Error importing row %s in job %s: %s", index, self.id, str(e))
-                    self.env['import.row.error'].create({
-                        'job_id': self.id,
-                        'row_number': int(index) + 1, # +1 for 1-based indexing in reporting
-                        'raw_data': str(row.to_dict()),
-                        'error_type': type(e).__name__,
-                        'error_message': str(e)
-                    })
+                    counters['failed'] += 1
+                    _logger.warning("Error importing row %s in job %s: %s", row_number, self.id, e)
+                    self._log_row_error(row_number, row, type(e).__name__, str(e))
 
-            # Update session progress counters
-            self.session_id.sudo().write({
-                'processed_rows': self.session_id.processed_rows + created_count + updated_count + skipped_count,
-                'updated_rows': self.session_id.updated_rows + updated_count,
-                'skipped_rows': self.session_id.skipped_rows + skipped_count,
-                'failed_rows': self.session_id.failed_rows + fail_count,
-                'duplicate_count_odoo': self.session_id.duplicate_count_odoo + dups_odoo_count,
-            })
-                    
             self.state = 'done'
         except Exception as e:
-            self.state = 'error'
-            self.error_message = str(e)
-            
+            _logger.exception("Import job %s failed", self.id)
+            self.write({'state': 'error', 'error_message': str(e)})
+
+        handled = counters['created'] + counters['updated'] + counters['skipped'] + counters['failed']
+        session.sudo().write({
+            'processed_rows': session.processed_rows + handled,
+            'created_rows': session.created_rows + counters['created'],
+            'updated_rows': session.updated_rows + counters['updated'],
+            'skipped_rows': session.skipped_rows + counters['skipped'],
+            'failed_rows': session.failed_rows + counters['failed'],
+            'duplicate_count_odoo': session.duplicate_count_odoo + counters['dups'],
+        })
         self._check_session_completion()
 
+    def _log_row_error(self, row_number, row, error_type, message):
+        raw = {k: v for k, v in row.to_dict().items() if v is not None and str(v) != 'nan'}
+        self.env['import.row.error'].create({
+            'job_id': self.id,
+            'row_number': int(row_number),  # real spreadsheet row (index kept by FileReader)
+            'raw_data': str(raw),
+            'error_type': error_type,
+            'error_message': message,
+        })
+
     def _check_session_completion(self):
-        """Check if all jobs are done and update session state."""
-        pending_jobs = self.env['import.job'].search_count([
-            ('session_id', '=', self.session_id.id),
+        """When no job is pending, close the session and stamp the end time."""
+        session = self.session_id
+        pending_jobs = self.search_count([
+            ('session_id', '=', session.id),
             ('state', 'in', ['pending', 'processing'])
         ])
         if pending_jobs == 0:
-            self.session_id.state = 'done'
+            all_failed = all(j.state == 'error' for j in session.job_ids)
+            session.sudo().write({
+                'state': 'error' if all_failed else 'done',
+                'end_time': fields.Datetime.now(),
+            })

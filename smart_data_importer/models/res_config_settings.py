@@ -1,4 +1,4 @@
-from odoo import models, fields
+from odoo import models, fields, api
 
 class ResConfigSettings(models.TransientModel):
     _inherit = 'res.config.settings'
@@ -26,10 +26,10 @@ class ResConfigSettings(models.TransientModel):
         help="When enabled, AI will analyze spreadsheets, auto-generate templates, suggest mappings and cleansing rules."
     )
     smart_data_importer_llm_provider = fields.Selection([
-        ('deepseek', 'DeepSeek (DeepSeek-V3 / R1)'),
-        ('anthropic', 'Anthropic (Claude 3.5 Sonnet / Haiku)'),
-        ('gemini', 'Google Gemini (Gemini 2.0 Flash / 1.5 Pro)'),
-        ('openai', 'OpenAI (GPT-4o / GPT-4o-mini)'),
+        ('deepseek', 'DeepSeek'),
+        ('anthropic', 'Anthropic (Claude)'),
+        ('gemini', 'Google Gemini'),
+        ('openai', 'OpenAI'),
         ('custom', 'Custom / Local (Ollama, Groq, OpenRouter)'),
     ], string="AI Provider",
         config_parameter='smart_data_importer.llm_provider',
@@ -38,7 +38,8 @@ class ResConfigSettings(models.TransientModel):
     smart_data_importer_llm_model = fields.Char(
         string="Model Name",
         config_parameter='smart_data_importer.llm_model',
-        help="e.g. deepseek-chat, claude-3-5-haiku-20241022, gemini-1.5-flash, gpt-4o-mini"
+        help="Leave empty to use the provider default: deepseek-chat, claude-haiku-5-5, "
+             "gemini-3.5-flash-lite, gpt-4o-mini, llama3."
     )
     smart_data_importer_llm_api_key = fields.Char(
         string="API Key",
@@ -47,8 +48,28 @@ class ResConfigSettings(models.TransientModel):
     smart_data_importer_llm_base_url = fields.Char(
         string="Custom Base URL / Endpoint",
         config_parameter='smart_data_importer.llm_base_url',
-        help="Custom OpenAI-compatible URL e.g. http://localhost:11434/v1 or https://api.groq.com/openai/v1"
+        help="Base URL of an OpenAI-compatible server, e.g. http://localhost:11434/v1 or "
+             "https://api.groq.com/openai/v1. '/chat/completions' is added automatically."
     )
+    smart_data_importer_llm_send_samples = fields.Boolean(
+        string="Send sample values to the AI",
+        default=True,
+        help="When disabled, only column headers are sent to the AI provider, never cell values "
+             "(useful when files contain personal data)."
+    )
+
+    @api.model
+    def get_values(self):
+        res = super().get_values()
+        param = self.env['ir.config_parameter'].sudo().get_param('smart_data_importer.llm_send_samples', 'True')
+        res['smart_data_importer_llm_send_samples'] = param != 'False'
+        return res
+
+    def set_values(self):
+        super().set_values()
+        self.env['ir.config_parameter'].sudo().set_param(
+            'smart_data_importer.llm_send_samples',
+            'True' if self.smart_data_importer_llm_send_samples else 'False')
 
     def action_test_llm_connection(self):
         """Tests the LLM connection and returns a notification to the user."""
@@ -60,6 +81,7 @@ class ResConfigSettings(models.TransientModel):
         config.set_param('smart_data_importer.llm_model', self.smart_data_importer_llm_model or '')
         config.set_param('smart_data_importer.llm_api_key', self.smart_data_importer_llm_api_key or '')
         config.set_param('smart_data_importer.llm_base_url', self.smart_data_importer_llm_base_url or '')
+        config.set_param('smart_data_importer.llm_send_samples', 'True' if self.smart_data_importer_llm_send_samples else 'False')
 
         from ..services.mapper_llm import LLMMapper
         success, message = LLMMapper.test_connection(self.env)

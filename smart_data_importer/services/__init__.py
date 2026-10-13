@@ -1,4 +1,6 @@
 from . import file_reader
+from . import field_catalog
+from . import value_converter
 from . import mapper_hash
 from . import mapper_fuzzy
 from . import mapper_llm

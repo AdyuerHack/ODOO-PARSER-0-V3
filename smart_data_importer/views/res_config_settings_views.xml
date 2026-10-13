@@ -26,14 +26,17 @@
                         <setting string="Provider" invisible="not smart_data_importer_llm_enabled">
                             <field name="smart_data_importer_llm_provider"/>
                         </setting>
-                        <setting string="Model Name" invisible="not smart_data_importer_llm_enabled" help="Leave blank to use provider default, or specify e.g. deepseek-chat, gemini-1.5-flash, claude-3-5-haiku-20241022, gpt-4o-mini">
-                            <field name="smart_data_importer_llm_model" placeholder="e.g. deepseek-chat, gemini-1.5-flash, gpt-4o-mini"/>
+                        <setting string="Model Name" invisible="not smart_data_importer_llm_enabled" help="Leave blank to use the provider default (deepseek-chat, claude-haiku-5-5, gemini-3.5-flash-lite, gpt-4o-mini).">
+                            <field name="smart_data_importer_llm_model" placeholder="e.g. deepseek-chat, claude-haiku-5-5, gemini-3.5-flash-lite"/>
                         </setting>
                         <setting string="API Key" invisible="not smart_data_importer_llm_enabled">
                             <field name="smart_data_importer_llm_api_key" password="True" placeholder="API key or token..."/>
                         </setting>
                         <setting string="Custom Base URL" invisible="not smart_data_importer_llm_enabled" help="Required for Custom/Local LLMs (Ollama http://localhost:11434/v1, Groq, OpenRouter). Optional proxy for others.">
                             <field name="smart_data_importer_llm_base_url" placeholder="https://api.groq.com/openai/v1"/>
+                        </setting>
+                        <setting string="Send sample values" invisible="not smart_data_importer_llm_enabled" help="If disabled, only the column headers are sent to the AI provider, never the cell contents.">
+                            <field name="smart_data_importer_llm_send_samples"/>
                         </setting>
                         <setting string="Test Connection" invisible="not smart_data_importer_llm_enabled" help="Verify your AI credentials and model availability.">
                             <button name="action_test_llm_connection" type="object" string="⚡ Probar Conexión IA" class="btn-secondary"/>

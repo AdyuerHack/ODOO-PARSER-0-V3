@@ -149,7 +149,7 @@
 
                         <!-- Custom Python Code -->
                         <page name="page_python" string="Python Code (Safe Eval)" invisible="action_type != 'python_code'">
-                            <div class="alert alert-warning py-2">
+                            <div class="alert alert-warning py-2" role="status">
                                 <strong>Advanced:</strong> Execute custom Python expressions. Use variable <code>value</code> for input and assign output to <code>result</code>.
                             </div>
                             <field name="python_code" widget="ace" options="{'mode': 'python'}"/>

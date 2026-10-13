@@ -7,7 +7,9 @@ class ImportProgressMixin(models.AbstractModel):
     start_time = fields.Datetime(string='Start Time', readonly=True)
     end_time = fields.Datetime(string='End Time', readonly=True)
     
-    processed_rows = fields.Integer(string='Processed Rows', readonly=True, default=0)
+    processed_rows = fields.Integer(string='Processed Rows', readonly=True, default=0,
+                                    help="Rows handled so far: created + updated + skipped + failed.")
+    created_rows = fields.Integer(string='Created Rows', readonly=True, default=0)
     updated_rows = fields.Integer(string='Updated Rows', readonly=True, default=0)
     skipped_rows = fields.Integer(string='Skipped Rows', readonly=True, default=0)
     failed_rows = fields.Integer(string='Failed Rows', readonly=True, default=0)
