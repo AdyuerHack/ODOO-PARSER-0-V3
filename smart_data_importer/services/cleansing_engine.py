@@ -57,7 +57,8 @@ class CleansingEngine:
 
     @classmethod
     def _handle_strip(cls, val, rule):
-        return val.strip() if val else val
+        # Trim both ends and collapse repeated inner spaces ("NATALIA  LLANOS " -> "NATALIA LLANOS")
+        return re.sub(r'\s+', ' ', val).strip() if val else val
 
     @classmethod
     def _handle_lowercase(cls, val, rule):

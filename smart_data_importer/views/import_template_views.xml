@@ -47,7 +47,7 @@
 
                     <group>
                         <group string="Target Configuration">
-                            <field name="model_id" readonly="1"/>
+                            <field name="model_id" options="{'no_create': True}"/>
                             <field name="active"/>
                         </group>
                         <group string="Default Deduplication Policy">
@@ -62,7 +62,9 @@
                                 <list editable="bottom">
                                     <field name="sequence" widget="handle"/>
                                     <field name="source_header"/>
-                                    <field name="target_field_id"/>
+                                    <field name="target_field_id" options="{'no_create': True}"
+                                           domain="[('model_id', '=', parent.model_id)]"/>
+                                    <field name="target_subfield" optional="hide"/>
                                     <field name="cleansing_rule_ids" widget="many2many_tags" options="{'color_field': 'action_type'}"/>
                                     <field name="is_ignored" widget="boolean_toggle"/>
                                 </list>

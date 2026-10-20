@@ -1,7 +1,7 @@
 {
     'name': 'Odoo Multi-Format Data Importer',
-    'version': '19.0.1.0.0',
-    'summary': 'Import data into res.partner from CSV/Excel files with AI-assisted mapping.',
+    'version': '19.0.1.1.0',
+    'summary': 'Import Odoo base templates (contacts, accounts, taxes, products...) from CSV/Excel with AI-assisted mapping.',
     'category': 'Productivity',
     'author': 'Team',
     'depends': ['base', 'web'],

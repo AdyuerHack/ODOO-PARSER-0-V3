@@ -1,4 +1,7 @@
 from odoo import models, fields, api, _
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ImportDeduplicationMixin(models.AbstractModel):
     _name = 'import.deduplication.mixin'
@@ -7,8 +10,11 @@ class ImportDeduplicationMixin(models.AbstractModel):
     duplicate_criterion = fields.Selection([
         ('vat', 'Tax ID / Document (vat)'),
         ('email', 'Email Address'),
-        ('vat_or_email', 'Tax ID or Email')
-    ], string='Duplicate Criterion', default='vat', required=True)
+        ('vat_or_email', 'Tax ID or Email'),
+        ('auto', 'Automatic (code, internal reference or name)'),
+    ], string='Duplicate Criterion', default='vat', required=True,
+        help="Contacts use Tax ID / Email. Other models (accounts, taxes, products...) "
+             "use the first mapped key among code, internal reference or name.")
     
     duplicate_policy = fields.Selection([
         ('update', 'Update Existing Records'),
@@ -25,12 +31,12 @@ class ImportDeduplicationMixin(models.AbstractModel):
             if not getattr(record, 'file', None):
                 record.duplicate_count_file = 0
                 continue
-            from odoo.addons.smart_data_importer.services.file_reader import FileReader
             from odoo.addons.smart_data_importer.services.deduplication_engine import DeduplicationEngine
             try:
-                file_info = FileReader.read(record.file, record.filename)
+                file_info = record._read_file()
                 df = file_info['df']
                 dups = DeduplicationEngine.analyze_file_duplicates(df, record)
                 record.duplicate_count_file = dups
             except Exception:
+                _logger.exception("Could not count duplicates in file")
                 record.duplicate_count_file = 0
