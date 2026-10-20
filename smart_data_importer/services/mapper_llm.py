@@ -186,10 +186,13 @@ class LLMMapper:
         )
 
         raw = cls._call_llm(cfg['provider'], cfg['model'], cfg['api_key'], prompt,
-                            base_url=cfg['base_url'], timeout=90, max_tokens=4000)
+                            base_url=cfg['base_url'], timeout=120, max_tokens=8192)
         parsed = cls._parse_json_object(raw)
         if not parsed:
-            raise ValueError("La IA no devolvió una respuesta con formato JSON válido.")
+            snippet = (raw or "").strip()[:200]
+            if snippet:
+                raise ValueError(f"La IA no devolvió una respuesta con formato JSON válido. Respuesta recibida: {snippet}...")
+            raise ValueError("La IA no devolvió una respuesta con formato JSON válido (respuesta vacía del proveedor).")
 
         by_norm = {FileReader.normalize_header(h): h for h in headers}
         ai_by_header = {}
@@ -270,10 +273,11 @@ class LLMMapper:
     @staticmethod
     def _fields_block(fields_records):
         lines = []
-        for f in fields_records.sorted('name'):
-            extra = f" -> {f.relation}" if f.relation else ""
-            required = " [obligatorio]" if f.required else ""
-            lines.append(f"- {f.name} ({f.ttype}{extra}): {f.field_description}{required}")
+        records = fields_records.sorted('name') if hasattr(fields_records, 'sorted') else sorted(fields_records, key=lambda f: getattr(f, 'name', ''))
+        for f in records:
+            extra = f" -> {f.relation}" if getattr(f, 'relation', False) else ""
+            required = " [obligatorio]" if getattr(f, 'required', False) else ""
+            lines.append(f"- {f.name} ({getattr(f, 'ttype', 'char')}{extra}): {getattr(f, 'field_description', f.name)}{required}")
         return "\n".join(lines)
 
     @classmethod
@@ -326,7 +330,8 @@ class LLMMapper:
             "5. Política de duplicados: 'update' (actualizar existentes), 'skip' (omitir) o 'create' (crear igual).\n"
             "6. Asigna un nombre descriptivo a la plantilla.\n"
             "7. En analysis_summary escribe en español un diagnóstico de calidad: columnas vacías, formatos "
-            "inconsistentes, valores que parecen errores y recomendaciones concretas.\n\n"
+            "inconsistentes, valores que parecen errores y recomendaciones concretas.\n"
+            "8. Mantén la justificación de cada columna concisa (1 oración breve) para optimizar la velocidad y el procesamiento.\n\n"
             "RESPONDE ÚNICAMENTE CON UN OBJETO JSON VÁLIDO (sin markdown) con esta estructura:\n"
             "{\n"
             '  "template_name": "Nombre sugerido",\n'
@@ -393,15 +398,31 @@ class LLMMapper:
             url = cls._endpoint(base_url, ANTHROPIC_API_URL, '/messages')
             if base_url and not base_url.rstrip('/').endswith(('/v1', '/messages')):
                 url = base_url.rstrip('/') + '/v1/messages'
-            data = cls._post(url, {
-                'x-api-key': api_key,
-                'anthropic-version': '2023-06-01',
-                'content-type': 'application/json',
-            }, {
+            body = {
                 'model': model,
                 'max_tokens': max_tokens,
                 'messages': [{'role': 'user', 'content': prompt}],
-            }, timeout, api_key)
+                # Prevent thinking models (e.g. claude-haiku-5-5, claude-3-7-sonnet) from consuming
+                # thousands of output tokens on internal monologue, which truncates the JSON response.
+                'thinking': {'type': 'disabled'},
+            }
+            try:
+                data = cls._post(url, {
+                    'x-api-key': api_key,
+                    'anthropic-version': '2023-06-01',
+                    'content-type': 'application/json',
+                }, body, timeout, api_key)
+            except LLMError as e:
+                # If an older Anthropic model or proxy rejects the 'thinking' parameter, retry without it
+                if 'thinking' in str(e).lower():
+                    body.pop('thinking', None)
+                    data = cls._post(url, {
+                        'x-api-key': api_key,
+                        'anthropic-version': '2023-06-01',
+                        'content-type': 'application/json',
+                    }, body, timeout, api_key)
+                else:
+                    raise
             return "".join(b.get('text', '') for b in data.get('content', []) if b.get('type') == 'text')
 
         if provider in ('openai', 'deepseek', 'custom') or (provider == 'gemini' and base_url):
@@ -411,11 +432,13 @@ class LLMMapper:
             url = cls._endpoint(base_url, default, '/chat/completions')
             payload = {'model': model, 'messages': [{'role': 'user', 'content': prompt}]}
             if provider == 'openai':
-                # Current OpenAI models expect max_completion_tokens; some reject a custom temperature
                 payload['max_completion_tokens'] = max_tokens
+                payload['response_format'] = {'type': 'json_object'}
             else:
                 payload['max_tokens'] = max_tokens
                 payload['temperature'] = 0.1
+                if provider == 'deepseek':
+                    payload['response_format'] = {'type': 'json_object'}
             headers = {'content-type': 'application/json'}
             if api_key:
                 headers['Authorization'] = f'Bearer {api_key}'
@@ -430,7 +453,11 @@ class LLMMapper:
             url = GEMINI_API_URL_TEMPLATE.format(model=model)
             data = cls._post(url, {'content-type': 'application/json', 'x-goog-api-key': api_key}, {
                 'contents': [{'parts': [{'text': prompt}]}],
-                'generationConfig': {'temperature': 0.1, 'maxOutputTokens': max_tokens},
+                'generationConfig': {
+                    'temperature': 0.1,
+                    'maxOutputTokens': max_tokens,
+                    'responseMimeType': 'application/json',
+                },
             }, timeout, api_key)
             candidates = data.get('candidates', [])
             if not candidates:
@@ -449,13 +476,21 @@ class LLMMapper:
         if not raw_text:
             return ""
         text = raw_text.strip()
+        # Strip reasoning / thinking tags (e.g. DeepSeek-R1, Qwen)
+        text = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
+        # Extract markdown code blocks
         if "```" in text:
             match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', text, re.IGNORECASE)
             if match:
                 text = match.group(1).strip()
             else:
-                text = text.replace('```json', '').replace('```', '').strip()
+                text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.IGNORECASE).strip()
+                text = re.sub(r'```$', '', text).strip()
         return text
+
+    @classmethod
+    def _remove_trailing_commas(cls, text):
+        return re.sub(r',\s*([\]}])', r'\1', text)
 
     @classmethod
     def _parse_json_array(cls, raw_text):
@@ -463,18 +498,31 @@ class LLMMapper:
         if not cleaned:
             return []
         try:
-            parsed = json.loads(cleaned)
-            return parsed if isinstance(parsed, list) else []
+            parsed = json.loads(cleaned, strict=False)
+            if isinstance(parsed, list):
+                return parsed
         except json.JSONDecodeError:
-            start, end = cleaned.find('['), cleaned.rfind(']')
-            if start != -1 and end > start:
-                try:
-                    parsed = json.loads(cleaned[start:end + 1])
-                    return parsed if isinstance(parsed, list) else []
-                except json.JSONDecodeError:
-                    pass
-            _logger.warning("No se pudo parsear el array JSON del LLM: %s", cleaned[:300])
-            return []
+            pass
+
+        cleaned_no_commas = cls._remove_trailing_commas(cleaned)
+        try:
+            parsed = json.loads(cleaned_no_commas, strict=False)
+            if isinstance(parsed, list):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        start, end = cleaned_no_commas.find('['), cleaned_no_commas.rfind(']')
+        if start != -1 and end > start:
+            try:
+                parsed = json.loads(cleaned_no_commas[start:end + 1], strict=False)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        _logger.warning("No se pudo parsear el array JSON del LLM: %s", cleaned[:300])
+        return []
 
     @classmethod
     def _parse_json_object(cls, raw_text):
@@ -482,15 +530,42 @@ class LLMMapper:
         if not cleaned:
             return {}
         try:
-            parsed = json.loads(cleaned)
-            return parsed if isinstance(parsed, dict) else {}
+            parsed = json.loads(cleaned, strict=False)
+            if isinstance(parsed, dict):
+                return parsed
         except json.JSONDecodeError:
-            start, end = cleaned.find('{'), cleaned.rfind('}')
-            if start != -1 and end > start:
+            pass
+
+        cleaned_no_commas = cls._remove_trailing_commas(cleaned)
+        try:
+            parsed = json.loads(cleaned_no_commas, strict=False)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+
+        start, end = cleaned_no_commas.find('{'), cleaned_no_commas.rfind('}')
+        if start != -1 and end > start:
+            try:
+                parsed = json.loads(cleaned_no_commas[start:end + 1], strict=False)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+        # If truncated inside 'mappings', attempt graceful recovery of completed items
+        if start != -1 and '"mappings"' in cleaned_no_commas:
+            last_brace = cleaned_no_commas.rfind('}')
+            if last_brace > start:
+                candidate = cleaned_no_commas[start:last_brace + 1].rstrip().rstrip(',') + '\n  ]\n}'
+                candidate = cls._remove_trailing_commas(candidate)
                 try:
-                    parsed = json.loads(cleaned[start:end + 1])
-                    return parsed if isinstance(parsed, dict) else {}
+                    parsed = json.loads(candidate, strict=False)
+                    if isinstance(parsed, dict) and 'mappings' in parsed:
+                        _logger.info("Recuperado JSON truncado del LLM con %d columnas mapeadas.", len(parsed.get('mappings', [])))
+                        return parsed
                 except json.JSONDecodeError:
                     pass
-            _logger.warning("No se pudo parsear el objeto JSON del LLM: %s", cleaned[:300])
-            return {}
+
+        _logger.warning("No se pudo parsear el objeto JSON del LLM: %s", cleaned[:300])
+        return {}
